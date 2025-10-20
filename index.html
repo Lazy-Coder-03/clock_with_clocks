@@ -10,10 +10,301 @@
   </head>
   <body>
     <main></main>
+
+    <!-- Brave search overlay -->
+    <div id="brave-search-overlay" aria-hidden="false">
+      <form
+        id="brave-search-form"
+        action="https://search.brave.com/search"
+        method="GET"
+        target="_blank"
+        role="search"
+      >
+        <input
+          id="brave-search-input"
+          name="q"
+          type="search"
+          placeholder="Search Brave (press / to focus)"
+          autocomplete="off"
+        />
+        <button type="submit">Search</button>
+        <button type="button" id="brave-search-close" aria-label="Close search">
+          ✕
+        </button>
+      </form>
+    </div>
     <!-- Patterns and classes (must load before sketch.js) -->
     <script src="digit_patterns.js"></script>
     <script src="small_clock.js"></script>
     <script src="digits_display.js"></script>
     <script src="sketch.js"></script>
+
+    <style>
+      /* Brave search overlay styling */
+      #brave-search-overlay {
+        position: fixed;
+        top: 18px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9999;
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(20, 24, 30, 0.6);
+        backdrop-filter: blur(6px);
+        padding: 8px 12px;
+        border-radius: 10px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+      }
+
+      #brave-search-form {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      #brave-search-input {
+        width: 460px;
+        max-width: 70vw;
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.03);
+        color: #fff;
+        outline: none;
+      }
+      #brave-search-input::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+      }
+      #brave-search-form button {
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+      }
+      #brave-search-form button[type="submit"] {
+        background: #ffd24a;
+        color: #111;
+      }
+      #brave-search-close {
+        background: transparent;
+        color: #fff;
+        font-size: 14px;
+      }
+    </style>
+
+    <script>
+      // Quick keyboard controls: '/' to focus, 'Esc' to blur/close
+      (function () {
+        const input = document.getElementById("brave-search-input");
+        const overlay = document.getElementById("brave-search-overlay");
+        const closeBtn = document.getElementById("brave-search-close");
+
+        // Focus on load (optional) -- commented out to avoid stealing focus
+        // input.focus();
+
+        document.addEventListener("keydown", (e) => {
+          // don't hijack input when typing in other inputs
+          const tag = document.activeElement && document.activeElement.tagName;
+          if (
+            tag === "INPUT" ||
+            tag === "TEXTAREA" ||
+            document.activeElement.isContentEditable
+          )
+            return;
+
+          if (e.key === "/") {
+            e.preventDefault();
+            input.focus();
+            input.select();
+          } else if (e.key === "Escape") {
+            input.blur();
+          }
+        });
+
+        closeBtn.addEventListener("click", () => input.blur());
+
+        // If overlay should be hidden on small screens or toggled, you can modify here.
+      })();
+    </script>
+    <style>
+      /* Autocomplete dropdown styles */
+      #brave-autocomplete {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        max-height: 260px;
+        overflow-y: auto;
+        background: rgba(18, 20, 24, 0.98);
+        border-radius: 8px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        z-index: 10000;
+        font-size: 14px;
+      }
+      .brave-autocomplete-item {
+        padding: 8px 10px;
+        cursor: pointer;
+      }
+      .brave-autocomplete-item:hover,
+      .brave-autocomplete-item.active {
+        background: rgba(255, 255, 255, 0.06);
+      }
+    </style>
+
+    <script>
+      (function () {
+        const input = document.getElementById("brave-search-input");
+        if (!input) return;
+
+        // create wrapper so dropdown is positioned correctly
+        const parent = input.parentElement;
+        parent.style.position = parent.style.position || "relative";
+
+        const dropdown = document.createElement("div");
+        dropdown.id = "brave-autocomplete";
+        dropdown.style.display = "none";
+        parent.appendChild(dropdown);
+
+        let items = [];
+        let selected = -1;
+        let controller = null;
+        let lastQuery = "";
+
+        function show() {
+          dropdown.style.display = "block";
+        }
+        function hide() {
+          dropdown.style.display = "none";
+          selected = -1;
+        }
+        function clearDropdown() {
+          dropdown.innerHTML = "";
+          items = [];
+        }
+
+        function render(suggestions) {
+          clearDropdown();
+          if (!suggestions || suggestions.length === 0) {
+            hide();
+            return;
+          }
+          suggestions.forEach((s, i) => {
+            const div = document.createElement("div");
+            div.className = "brave-autocomplete-item";
+            div.textContent = s.phrase || s;
+            div.dataset.index = i;
+            div.addEventListener("mousedown", (ev) => {
+              ev.preventDefault();
+              selectIndex(i);
+              submitQuery();
+            });
+            dropdown.appendChild(div);
+          });
+          items = Array.from(
+            dropdown.querySelectorAll(".brave-autocomplete-item")
+          );
+          positionDropdown();
+          show();
+        }
+
+        function positionDropdown() {
+          const rect = input.getBoundingClientRect();
+          dropdown.style.width = rect.width + "px";
+        }
+
+        function selectIndex(i) {
+          if (selected >= 0 && items[selected])
+            items[selected].classList.remove("active");
+          selected = i;
+          if (selected >= 0 && items[selected]) {
+            items[selected].classList.add("active");
+            input.value = items[selected].textContent;
+          }
+        }
+
+        function submitQuery() {
+          const form = document.getElementById("brave-search-form");
+          if (form) form.submit();
+          hide();
+          input.blur();
+        }
+
+        function debounce(fn, wait) {
+          let t;
+          return function (...args) {
+            clearTimeout(t);
+            t = setTimeout(() => fn.apply(this, args), wait);
+          };
+        }
+
+        async function fetchSuggestions(query) {
+          if (!query) {
+            render([]);
+            return;
+          }
+          if (query === lastQuery) return;
+          lastQuery = query;
+
+          if (controller) controller.abort();
+          controller = new AbortController();
+          const signal = controller.signal;
+
+          try {
+            const url =
+              "https://duckduckgo.com/ac/?q=" + encodeURIComponent(query);
+            const res = await fetch(url, { signal });
+            if (!res.ok) {
+              render([]);
+              return;
+            }
+            const json = await res.json();
+            const suggestions = Array.isArray(json)
+              ? json.map((o) => o.phrase || o)
+              : [];
+            render(suggestions);
+          } catch (err) {
+            render([]);
+          }
+        }
+
+        const debouncedFetch = debounce((q) => fetchSuggestions(q), 160);
+
+        input.addEventListener("input", (e) => {
+          const q = e.target.value.trim();
+          if (!q) {
+            clearDropdown();
+            hide();
+            return;
+          }
+          debouncedFetch(q);
+        });
+
+        input.addEventListener("keydown", (e) => {
+          if (dropdown.style.display === "none") return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            selectIndex(Math.min(items.length - 1, selected + 1));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            selectIndex(Math.max(0, selected - 1));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            if (selected >= 0) submitQuery();
+            else submitQuery();
+          } else if (e.key === "Escape") {
+            hide();
+          }
+        });
+
+        document.addEventListener("click", (ev) => {
+          if (!parent.contains(ev.target)) hide();
+        });
+        window.addEventListener("resize", positionDropdown);
+        window.addEventListener("scroll", positionDropdown, true);
+      })();
+    </script>
   </body>
 </html>
