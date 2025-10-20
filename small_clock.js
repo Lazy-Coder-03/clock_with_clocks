@@ -1,65 +1,107 @@
-// small_clock.js
-// Defines the small_clock class and attaches it to the global scope for non-module usage.
-
 (function (global) {
     class small_clock {
         constructor(x, y, r, angles) {
-            // createVector is available in p5 global mode
             this.pos = createVector(x, y);
             this.r = r;
             this.angles = angles.slice();
-            this.targetAngles = angles.slice(); // Initialize target angles
-            this.speed = 10; // Degrees per frame - adjust for faster/slower animation
+            this.targetAngles = angles.slice();
+            this.speed = 20; // Smoother animation speed
         }
 
         render() {
             push();
             translate(this.pos.x, this.pos.y);
-            stroke(255,150);
-            noFill();
-            rectMode(CENTER)
 
-            rect(0, 0, this.r * 2, this.r * 2, this.r*0.1);
+            // Enhanced container with depth
+            noFill();
+            rectMode(CENTER);
+
+            // Outer glow
+            drawingContext.shadowBlur = 8;
+            drawingContext.shadowColor = 'rgba(100, 120, 180, 0.3)';
+            stroke(60, 70, 90, 200);
+            strokeWeight(1.5);
+            rect(0, 0, this.r * 2.1, this.r * 2.1, this.r * 0.15);
+
+            // Main container with gradient effect
+            drawingContext.shadowBlur = 0;
+            stroke(80, 95, 120, 180);
+            strokeWeight(2);
+            rect(0, 0, this.r * 2, this.r * 2, this.r * 0.12);
+
+            // Inner shadow effect
+            stroke(30, 40, 55, 100);
+            strokeWeight(1);
+            rect(0, 0, this.r * 1.9, this.r * 1.9, this.r * 0.1);
 
             // Animate towards target angles
             this.animate_to_angles(this.targetAngles);
 
-            for (let angle of this.angles) {
+            // Enhanced clock hands with glow - both same length
+            for (let i = 0; i < this.angles.length; i++) {
+                let angle = this.angles[i];
                 let a = radians(angle - 90);
-                let x = cos(a) * this.r * 0.8;
-                let y = sin(a) * this.r * 0.8;
-                stroke(220, 220, 0);
-                strokeWeight(2)
+                let x = cos(a) * this.r * 0.75;
+                let y = sin(a) * this.r * 0.75;
+
+                // Glow effect for hands
+                drawingContext.shadowBlur = 12;
+                drawingContext.shadowColor = i === 0 ? 'rgba(255, 215, 0, 0.6)' : 'rgba(255, 230, 100, 0.6)';
+
+                // Hand gradient from center to tip
+                let gradient = drawingContext.createLinearGradient(0, 0, x, y);
+                gradient.addColorStop(0, 'rgba(255, 240, 150, 1)');
+                gradient.addColorStop(1, 'rgba(255, 215, 0, 1)');
+                drawingContext.strokeStyle = gradient;
+
+                strokeWeight(3);
                 line(0, 0, x, y);
+
+                // Remove hand tip ellipse so hands render as lines only
+                // If you want a subtle highlight at the tip, you can uncomment the
+                // following lines to draw a small point using stroke instead of an ellipse.
+                // stroke(255, 240, 150);
+                // strokeWeight(2);
+                // point(x, y);
             }
+
+            drawingContext.shadowBlur = 0;
+
+            // Center dot with metallic look
+            fill(220, 210, 180);
+            stroke(180, 170, 140);
+            strokeWeight(1);
+            ellipse(0, 0, this.r * 0.2, this.r * 0.2);
+
             pop();
         }
 
         animate_to_angles(targetAngles) {
-            this.targetAngles = targetAngles.slice(); // Update target angles
+            // Defensive: ensure targetAngles is an array
+            if (!Array.isArray(targetAngles)) return;
+            this.targetAngles = targetAngles.slice();
 
             for (let i = 0; i < this.angles.length; i++) {
-                let current = this.angles[i];
-                let target = targetAngles[i];
+                // normalize current angle to [0,360)
+                let current = ((this.angles[i] % 360) + 360) % 360;
 
-                // Calculate the difference
-                let diff = target - current;
+                // if no target provided for this index, keep current
+                let target = (typeof targetAngles[i] === 'number')
+                    ? ((targetAngles[i] % 360) + 360) % 360
+                    : current;
 
-                // Normalize the difference to be between -180 and 180
-                // This ensures we always take the shortest path
-                while (diff > 180) diff -= 360;
-                while (diff < -180) diff += 360;
+                // shortest angular difference in range (-180, 180]
+                let diff = ((target - current + 540) % 360) - 180;
 
-                // If we're close enough, snap to target
-                if (abs(diff) < this.speed) {
+                let absDiff = Math.abs(diff);
+                if (absDiff <= this.speed) {
+                    // close enough: snap to target
                     this.angles[i] = target;
                 } else {
-                    // Move towards target by speed amount in the correct direction
-                    this.angles[i] += this.speed * (diff > 0 ? 1 : -1);
+                    // step towards target along shortest path without overshooting
+                    let step = this.speed * (diff > 0 ? 1 : -1);
+                    this.angles[i] = (current + step + 360) % 360;
                 }
-
-                // Keep angles normalized between 0 and 360
-                this.angles[i] = (this.angles[i] + 360) % 360;
             }
         }
     }
